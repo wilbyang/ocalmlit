@@ -1,0 +1,33 @@
+lib/typechecker.mli
+  d6b013d1e1809699 1-15
+lib/typ.mli
+  d6b013d1e1809699 1-29
+lib/typ.ml
+  d6b013d1e1809699 1-46
+lib/dune
+  d6b013d1e1809699 3
+lib/typechecker.ml
+  d6b013d1e1809699 1-159
+bin/main.ml
+  d6b013d1e1809699 3,6-20,24-25,27,34-35,38-42,44-49,65-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "e45b416e63065f92a25f18bc9052d6044724a384",
+  "prompts": {
+    "d6b013d1e1809699": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "977b0f53-6ca9-4706-9f62-99a037cfb873",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "wilbyang",
+      "messages": [],
+      "total_additions": 291,
+      "total_deletions": 14,
+      "accepted_lines": 291,
+      "overriden_lines": 0
+    }
+  }
+}
