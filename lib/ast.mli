@@ -11,3 +11,6 @@ type expr =
   | Let_rec  of string * string * expr * expr
   | Fun      of string * expr
   | App      of expr * expr
+
+val pp : expr -> string
+(** Pretty-print an expression. Used by the tracing evaluator. *)
