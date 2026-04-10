@@ -1,13 +1,10 @@
 open Ast
 open Value
 
-(* ---- Hook signature ---- *)
-
 module type HOOKS = sig
-  val wrap : Ast.expr -> (unit -> Value.t) -> Value.t
+  val wrap     : Ast.expr -> (unit -> Value.t) -> Value.t
+  val on_apply : Value.t -> Value.t -> (unit -> Value.t) -> Value.t
 end
-
-(* ---- Core evaluator functor ---- *)
 
 module Make (H : HOOKS) = struct
 
@@ -38,22 +35,31 @@ module Make (H : HOOKS) = struct
         eval (Env.extend name (eval env def) env) body
 
       | Let_rec (f, x, def, body) ->
-        eval (Env.extend f (Rec_closure (f, x, def, env)) env) body
+        (* Capture the current env as a list; the evaluator works with
+           Env.t (the Map) but Value.t stores Value.env (the list). *)
+        let closure = Rec_closure (f, x, def, Env.to_list env) in
+        eval (Env.extend f closure env) body
 
       | Fun (param, body) ->
-        Closure (param, body, env)
+        (* Snapshot the live Map env into the closure's association list. *)
+        Closure (param, body, Env.to_list env)
 
       | App (func, arg) ->
         apply (eval env func) (eval env arg)
     )
 
   and apply func arg =
-    match func with
-    | Closure (param, body, env) ->
-      eval (Env.extend param arg env) body
-    | Rec_closure (f, x, body, env) ->
-      eval (Env.extend x arg (Env.extend f func env)) body
-    | _ -> failwith "apply: not a function"
+    H.on_apply func arg (fun () ->
+      match func with
+      | Closure (param, body, captured) ->
+        (* Reconstruct a Map env from the captured list, then extend. *)
+        eval (Env.extend param arg (Env.of_list captured)) body
+      | Rec_closure (f, x, body, captured) ->
+        let env = Env.extend x arg
+                    (Env.extend f func (Env.of_list captured)) in
+        eval env body
+      | _ -> failwith "apply: not a function"
+    )
 
   and eval_binop op lv rv =
     match op, lv, rv with
@@ -71,12 +77,9 @@ module Make (H : HOOKS) = struct
 
 end
 
-(* ---- Built-in hook implementations ---- *)
-
 module No_hooks = struct
-  let wrap _ f = f ()
+  let wrap _ f     = f ()
+  let on_apply _ _ f = f ()
 end
-
-(* ---- Default evaluator (backward-compatible) ---- *)
 
 include Make (No_hooks)

@@ -1,8 +1,7 @@
 open Ocamlit
 
 (* ================================================================
-   Strategy 1 — Standard (no hooks)
-   Eval.eval is already Make(No_hooks).eval via [include].
+   Strategy 1 — Standard (Make(No_hooks), aliased as Eval.eval)
    ================================================================ *)
 
 let run label src =
@@ -23,14 +22,13 @@ let run label src =
 
 (* ================================================================
    Strategy 2 — Step counter
-   Counts every expression node visited during evaluation.
    ================================================================ *)
 
 module Step_hooks = struct
   let count = ref 0
   let reset () = count := 0
-  (* wrap: increment the counter, then evaluate normally *)
-  let wrap _ f = incr count; f ()
+  let wrap _ f     = incr count; f ()
+  let on_apply _ _ f = f ()          (* applications counted via wrap on body *)
 end
 
 module Counting_eval = Eval.Make (Step_hooks)
@@ -45,8 +43,7 @@ let run_counted label src =
       label (Value.pp v) !Step_hooks.count
 
 (* ================================================================
-   Strategy 3 — Tracing evaluator
-   Prints each expression as it is evaluated, indented by call depth.
+   Strategy 3 — Tracer
    ================================================================ *)
 
 module Trace_hooks = struct
@@ -60,6 +57,8 @@ module Trace_hooks = struct
     decr depth;
     Printf.printf "%s   =  %s\n" pad (Value.pp v);
     v
+
+  let on_apply _ _ f = f ()
 end
 
 module Tracing_eval = Eval.Make (Trace_hooks)
@@ -74,11 +73,54 @@ let run_traced src =
     Printf.printf "%s\nResult: %s\n\n" (String.make 60 '-') (Value.pp v)
 
 (* ================================================================
+   Strategy 4 — Memoising evaluator
+   Caches calls to named recursive functions on integer arguments.
+   Turns fib from O(2^n) to O(n) evaluations.
+   ================================================================ *)
+
+module Memo_hooks = struct
+  (* Key: (recursive_function_name, int_argument) *)
+  let cache : (string * int, Value.t) Hashtbl.t = Hashtbl.create 64
+  let reset ()  = Hashtbl.clear cache
+
+  let wrap _ f = f ()
+
+  let on_apply func arg f =
+    match func, arg with
+    | Value.Rec_closure (name, _, _, _), Value.Int n ->
+      let key = (name, n) in
+      (match Hashtbl.find_opt cache key with
+       | Some v -> v                          (* cache hit — skip recursion *)
+       | None   ->
+         let v = f () in                      (* compute, then cache *)
+         Hashtbl.replace cache key v;
+         v)
+    | _ -> f ()                              (* non-recursive or non-int: pass through *)
+end
+
+module Memo_eval = Eval.Make (Memo_hooks)
+
+let run_memo label src =
+  match Parser.parse src with
+  | exception Failure msg -> Printf.printf "%s  PARSE ERROR: %s\n" label msg
+  | expr ->
+    (* also count steps to compare with the naive version *)
+    Step_hooks.reset ();
+    Memo_hooks.reset ();
+    (* build a combined counting+memoising evaluator inline *)
+    let module Combined = Eval.Make (struct
+      let wrap expr f  = Step_hooks.wrap expr f
+      let on_apply func arg f = Memo_hooks.on_apply func arg f
+    end) in
+    let v = Combined.eval Env.empty expr in
+    Printf.printf "%-36s  =>  %-6s  (%d steps, memoised)\n"
+      label (Value.pp v) !Step_hooks.count
+
+(* ================================================================
    Main
    ================================================================ *)
 
 let () =
-  (* --- Standard tests --- *)
   print_endline "=== Standard evaluator ===";
   run "1 + 2 * 3"              "1 + 2 * 3";
   run "let x = 10 in x + 5"   "let x = 10 in x + 5";
@@ -94,18 +136,17 @@ let () =
     "let id = fun x -> x in if id true then id 1 else id 2";
   print_newline ();
 
-  (* --- Step counter --- *)
-  print_endline "=== Step counter (Make(Step_hooks)) ===";
-  run_counted "1 + 2 * 3"
-    "1 + 2 * 3";
-  run_counted "fact 6"
-    "let rec fact n = if n = 0 then 1 else n * fact (n - 1) in fact 6";
-  run_counted "fib 10"
-    "let rec fib n = if n < 2 then n else fib (n-1) + fib (n-2) in fib 10";
-  print_newline ();
+  print_endline "=== Step counter: naive vs memoised ===";
+  let fib_src = "let rec fib n = if n < 2 then n else fib (n-1) + fib (n-2) in fib " in
+  List.iter (fun n ->
+    let src = fib_src ^ string_of_int n in
+    let label = Printf.sprintf "fib %d" n in
+    run_counted label src;
+    run_memo    label src;
+    print_newline ()
+  ) [10; 20; 30];
 
-  (* --- Tracer (small example to keep output readable) --- *)
-  print_endline "=== Tracer (Make(Trace_hooks)) ===";
+  print_endline "=== Tracer (small example) ===";
   run_traced "(fun x -> x + 1) 3"
 
 (* ================================================================
