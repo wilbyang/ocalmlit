@@ -1,43 +1,52 @@
 open Ocamlit
-open Ast
 
-let run label expr =
-  match Eval.eval Env.empty expr with
-  | v -> Printf.printf "%-30s => %s\n" label (Value.pp v)
-  | exception Failure msg -> Printf.printf "%-30s => ERROR: %s\n" label msg
+(* ---- Test suite (using the parser now) ---- *)
+
+let run label src =
+  match Parser.parse src |> Eval.eval Env.empty with
+  | v -> Printf.printf "%-36s => %s\n" label (Value.pp v)
+  | exception Failure msg -> Printf.printf "%-36s => ERROR: %s\n" label msg
 
 let () =
-  run "1 + 2 * 3"
-    (Binop ("+", Lit_int 1, Binop ("*", Lit_int 2, Lit_int 3)));
-
-  run "let x = 10 in x + 5"
-    (Let ("x", Lit_int 10, Binop ("+", Var "x", Lit_int 5)));
-
-  run "if true then 42 else 0"
-    (If (Lit_bool true, Lit_int 42, Lit_int 0));
-
-  run "(fun x -> x * x) 7"
-    (App (Fun ("x", Binop ("*", Var "x", Var "x")), Lit_int 7));
-
+  print_endline "=== Tests ===";
+  run "1 + 2 * 3"             "1 + 2 * 3";
+  run "let x = 10 in x + 5"  "let x = 10 in x + 5";
+  run "if true then 42 else 0" "if true then 42 else 0";
+  run "(fun x -> x * x) 7"   "(fun x -> x * x) 7";
   run "curried add 3 4"
-    (Let ("add",
-      Fun ("x", Fun ("y", Binop ("+", Var "x", Var "y"))),
-      App (App (Var "add", Lit_int 3), Lit_int 4)));
-
+    "let add = fun x -> fun y -> x + y in add 3 4";
   run "fact 6"
-    (Let_rec ("fact", "n",
-      If (Binop ("=", Var "n", Lit_int 0),
-          Lit_int 1,
-          Binop ("*", Var "n",
-            App (Var "fact", Binop ("-", Var "n", Lit_int 1)))),
-      App (Var "fact", Lit_int 6)));
-
+    "let rec fact n = if n = 0 then 1 else n * fact (n - 1) in fact 6";
   run "closure capture"
-    (Let ("x", Lit_int 3,
-      App (Fun ("y", Binop ("+", Var "x", Var "y")), Lit_int 4)));
+    "let x = 3 in (fun y -> x + y) 4";
+  run "not false"             "not false";
+  run "10 / 2"                "10 / 2";
+  run "fib 10"
+    "let rec fib n = if n < 2 then n else fib (n - 1) + fib (n - 2) in fib 10";
+  run "higher-order: map-like"
+    "let apply = fun f -> fun x -> f x in apply (fun n -> n * n) 9";
+  print_newline ()
 
-  run "not false"
-    (Unop ("not", Lit_bool false));
+(* ---- REPL ---- *)
 
-  run "10 / 2"
-    (Binop ("/", Lit_int 10, Lit_int 2))
+let repl () =
+  print_endline "ocamlit REPL  (type 'exit' to quit)";
+  print_endline "------------------------------------";
+  let rec loop () =
+    print_string "> ";
+    flush stdout;
+    match input_line stdin with
+    | exception End_of_file -> print_newline ()
+    | "exit" | "quit"       -> ()
+    | ""                    -> loop ()
+    | src ->
+      (match Parser.parse src |> Eval.eval Env.empty with
+       | v -> print_endline (Value.pp v)
+       | exception Failure msg -> Printf.printf "Error: %s\n" msg);
+      loop ()
+  in
+  loop ()
+
+let () =
+  if Array.length Sys.argv > 1 && Sys.argv.(1) = "--repl"
+  then repl ()
