@@ -1,0 +1,31 @@
+lib/ast.ml
+  d6b013d1e1809699 12-23
+lib/eval.ml
+  d6b013d1e1809699 4-82
+lib/ast.mli
+  d6b013d1e1809699 14-16
+bin/main.ml
+  d6b013d1e1809699 3-6,10,24-79,81-82,92-93,96-104,107-113,116-139
+lib/eval.mli
+  d6b013d1e1809699 1,3-30,33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "98a6d72a3756757f49f9a38ee87926aa199cc2b9",
+  "prompts": {
+    "d6b013d1e1809699": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "977b0f53-6ca9-4706-9f62-99a037cfb873",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "wilbyang",
+      "messages": [],
+      "total_additions": 232,
+      "total_deletions": 108,
+      "accepted_lines": 232,
+      "overriden_lines": 0
+    }
+  }
+}
